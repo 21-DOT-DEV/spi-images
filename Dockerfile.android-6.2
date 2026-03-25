@@ -24,7 +24,7 @@ RUN cd /usr/local/bin && ln -s $HOME/.local/share/swiftly/bin/swiftly
 # [1]: https://github.com/swiftlang/swift-docker/pull/467
 ##################################################################################
 
-RUN swiftly install 6.2.0
+RUN swiftly install 6.2.4
 
 ENV SWIFTLY_HOME_DIR="/root/.local/share/swiftly"
 ENV SWIFTLY_BIN_DIR="/root/.local/share/swiftly/bin"
@@ -32,6 +32,7 @@ ENV SWIFTLY_TOOLCHAINS_DIR="/root/.local/share/swiftly/toolchains"
 ENV PATH="$SWIFTLY_BIN_DIR:$PATH"
 
 RUN swift sdk install https://github.com/skiptools/swift-android-toolchain/releases/download/6.2/swift-6.2-RELEASE-android-0.1.artifactbundle.tar.gz --checksum 52cfebf048b8fe732403c98474908a3f237913cbba9e3fcef3f90ee732bf2cec
+
 
 ENV NDK_DOWNLOAD_DIR=/android-ndk
 RUN mkdir $NDK_DOWNLOAD_DIR

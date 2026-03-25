@@ -1,0 +1,48 @@
+FROM ubuntu:jammy
+
+ARG SDK_URL
+ARG CHECKSUM
+
+ENV DEBIAN_FRONTEND=noninteractive 
+
+RUN apt-get update -y && apt-get install -y curl file gpg binutils git unzip gnupg2 libc6-dev libcurl4-openssl-dev libedit2 libgcc-11-dev libpython3-dev libstdc++-11-dev libxml2-dev libz3-dev pkg-config python3-lldb-13 tzdata zlib1g-dev
+
+RUN curl -O https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz && \
+tar zxf swiftly-$(uname -m).tar.gz && \
+./swiftly init -y --quiet-shell-followup --skip-install && \
+. "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh" && \
+hash -r
+
+RUN cd /usr/local/bin && ln -s $HOME/.local/share/swiftly/bin/swiftly 
+
+##################################################################################
+# Everything below is hardcoded while we use a Swift-6.2 nightly toolchain plus
+# matching Android SDK. Once the Android SDK build scripts PR [1] is merged,
+# we should be able to reuse these scripts in some fashion or work with the
+# maintainers to set up a shared image repository.
+#
+# [1]: https://github.com/swiftlang/swift-docker/pull/467
+##################################################################################
+
+RUN swiftly install 6.3.0
+
+ENV SWIFTLY_HOME_DIR="/root/.local/share/swiftly"
+ENV SWIFTLY_BIN_DIR="/root/.local/share/swiftly/bin"
+ENV SWIFTLY_TOOLCHAINS_DIR="/root/.local/share/swiftly/toolchains"
+ENV PATH="$SWIFTLY_BIN_DIR:$PATH"
+
+RUN swift sdk install https://download.swift.org/swift-6.3-release/android-sdk/swift-6.3-RELEASE/swift-6.3-RELEASE_android.artifactbundle.tar.gz --checksum 2f2942c4bcea7965a08665206212c66991dabe23725aeec7c4365fc91acad088
+
+
+ENV NDK_DOWNLOAD_DIR=/android-ndk
+RUN mkdir $NDK_DOWNLOAD_DIR
+WORKDIR $NDK_DOWNLOAD_DIR
+
+RUN curl -fSLO https://dl.google.com/android/repository/android-ndk-r27d-$(uname -s).zip
+RUN unzip -q android-ndk-r27d-*.zip
+
+ENV ANDROID_NDK_HOME=$NDK_DOWNLOAD_DIR/android-ndk-r27d
+
+WORKDIR /root/.swiftpm
+
+RUN bash ./swift-sdks/swift-6.3-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
