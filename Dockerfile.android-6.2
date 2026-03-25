@@ -33,6 +33,7 @@ ENV PATH="$SWIFTLY_BIN_DIR:$PATH"
 
 RUN swift sdk install https://github.com/skiptools/swift-android-toolchain/releases/download/6.2/swift-6.2-RELEASE-android-0.1.artifactbundle.tar.gz --checksum 52cfebf048b8fe732403c98474908a3f237913cbba9e3fcef3f90ee732bf2cec
 
+
 ENV NDK_DOWNLOAD_DIR=/android-ndk
 RUN mkdir $NDK_DOWNLOAD_DIR
 WORKDIR $NDK_DOWNLOAD_DIR

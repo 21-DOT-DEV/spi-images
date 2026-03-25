@@ -17,10 +17,10 @@ build base image:
   parallel:
     matrix:
       - SWIFT_VERSION:
-          - '6.2.3'
-          - '6.1.1'
+          - '6.3.0'
+          - '6.2.4'
+          - '6.1.3'
           - '6.0.3'
-          - '5.10.0'
   script: |
     BASENAME=basic
     SHORT_SWIFT_VERSION=${SWIFT_VERSION%.*}  # 5.7.3 -> 5.7
@@ -60,8 +60,9 @@ build wasm image:
     matrix:
       - SWIFT_VERSION:
           # Make sure these are handled in the case statement below
-          - '6.2.0'
-          - '6.1.0'
+          - '6.3.0'
+          - '6.2.4'
+          - '6.1.3'
           - '6.0.3'
   script: |
     BASENAME=wasm
@@ -85,11 +86,15 @@ build wasm image:
       #   SDK_URL=https://download.swift.org/swift-6.2-branch/wasm-sdk/${TAG}/${TAG}_wasm.artifactbundle.tar.gz
       #   CHECKSUM=c55777bd47790c9ee728380b4d4e145153f805432775511777ac89d07b559226
       #   ;;
-      6.2.0)
+      6.3.0)
+        SDK_URL=https://download.swift.org/swift-6.3-release/wasm-sdk/swift-6.3-RELEASE/swift-6.3-RELEASE_wasm.artifactbundle.tar.gz
+        CHECKSUM=9fa4016ee632c7e9e906608ec3b55cf13dfc4dff44e47574c5af58064dc33fd9
+        ;;
+      6.2.4)
         SDK_URL=https://download.swift.org/swift-6.2-release/wasm/swift-6.2-RELEASE/swift-6.2-RELEASE_wasm.artifactbundle.tar.gz
         CHECKSUM=fe4e8648309fce86ea522e9e0d1dc48e82df6ba6e5743dbf0c53db8429fb5224
         ;;
-      6.1.0)
+      6.1.3)
         TAG=6.1-RELEASE
         SDK_URL=https://github.com/swiftwasm/swift/releases/download/swift-wasm-${TAG}/swift-wasm-${TAG}-wasm32-unknown-wasi.artifactbundle.zip
         CHECKSUM=7550b4c77a55f4b637c376f5d192f297fe185607003a6212ad608276928db992
@@ -127,8 +132,9 @@ build android image:
   parallel:
     matrix:
       - SWIFT_VERSION:
+          - '6.3.0'
           - '6.2.0'
-          - '6.1.0'
+          - '6.1.3'
   script: |
     BASENAME=android
     
@@ -145,10 +151,13 @@ build android image:
     SWIFT_IMAGE=swift:$SWIFT_VERSION-jammy
     
     case $SWIFT_VERSION in
+      6.3.0)
+        # all variables are hardcoded in Dockerfile.android-6.3 for now
+        ;;
       6.2.0)
         # all variables are hardcoded in Dockerfile.android-6.2 for now
         ;;
-      6.1.0)
+      6.1.3)
         SDK_URL=https://source.skip.tools/swift-android-toolchain/releases/download/6.1/swift-6.1-RELEASE-android-24-0.1.artifactbundle.tar.gz
         CHECKSUM=f8696e3e84111b8c2c6f6e564b6266357987ea8d4aa3b2cf92f144357acde1c9
         ;;
@@ -183,6 +192,7 @@ build custom docc image:
         matrix:
           - SWIFT_VERSION:
               # for the derived images we don't deal with Swift patch versions
+              - '6.3'
               - '6.2'
       script: |
         BASENAME=custom-docc
