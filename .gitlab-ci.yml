@@ -61,7 +61,7 @@ build wasm image:
       - SWIFT_VERSION:
           # Make sure these are handled in the case statement below
           - '6.3.0'
-          - '6.2.4'
+          - '6.2.0'
           - '6.1.3'
           - '6.0.3'
   script: |
@@ -90,7 +90,7 @@ build wasm image:
         SDK_URL=https://download.swift.org/swift-6.3-release/wasm-sdk/swift-6.3-RELEASE/swift-6.3-RELEASE_wasm.artifactbundle.tar.gz
         CHECKSUM=9fa4016ee632c7e9e906608ec3b55cf13dfc4dff44e47574c5af58064dc33fd9
         ;;
-      6.2.4)
+      6.2.0)
         SDK_URL=https://download.swift.org/swift-6.2-release/wasm/swift-6.2-RELEASE/swift-6.2-RELEASE_wasm.artifactbundle.tar.gz
         CHECKSUM=fe4e8648309fce86ea522e9e0d1dc48e82df6ba6e5743dbf0c53db8429fb5224
         ;;
