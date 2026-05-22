@@ -17,7 +17,7 @@ build base image:
   parallel:
     matrix:
       - SWIFT_VERSION:
-          - '6.3.0'
+          - '6.3.2'
           - '6.2.4'
           - '6.1.3'
           - '6.0.3'
@@ -87,8 +87,10 @@ build wasm image:
       #   CHECKSUM=c55777bd47790c9ee728380b4d4e145153f805432775511777ac89d07b559226
       #   ;;
       6.3.0)
-        SDK_URL=https://download.swift.org/swift-6.3-release/wasm-sdk/swift-6.3-RELEASE/swift-6.3-RELEASE_wasm.artifactbundle.tar.gz
-        CHECKSUM=9fa4016ee632c7e9e906608ec3b55cf13dfc4dff44e47574c5af58064dc33fd9
+        # check https://www.swift.org/documentation/articles/wasm-getting-started.html for
+        # the latest SDK_URL and CHECKSUM
+        SDK_URL=https://download.swift.org/swift-6.3.2-release/wasm-sdk/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE_wasm.artifactbundle.tar.gz
+        CHECKSUM=a61f0584c93283589f8b2f42db05c1f9a182b506c2957271402992655591dd7c
         ;;
       6.2.0)
         SDK_URL=https://download.swift.org/swift-6.2-release/wasm/swift-6.2-RELEASE/swift-6.2-RELEASE_wasm.artifactbundle.tar.gz
@@ -132,7 +134,7 @@ build android image:
   parallel:
     matrix:
       - SWIFT_VERSION:
-          - '6.3.0'
+          - '6.3.2'
           - '6.2.0'
           - '6.1.3'
   script: |
@@ -151,7 +153,7 @@ build android image:
     SWIFT_IMAGE=swift:$SWIFT_VERSION-jammy
     
     case $SWIFT_VERSION in
-      6.3.0)
+      6.3.2)
         # all variables are hardcoded in Dockerfile.android-6.3 for now
         ;;
       6.2.0)
