@@ -60,7 +60,7 @@ build wasm image:
     matrix:
       - SWIFT_VERSION:
           # Make sure these are handled in the case statement below
-          - '6.3.0'
+          - '6.3.2'
           - '6.2.0'
           - '6.1.3'
           - '6.0.3'
@@ -86,7 +86,7 @@ build wasm image:
       #   SDK_URL=https://download.swift.org/swift-6.2-branch/wasm-sdk/${TAG}/${TAG}_wasm.artifactbundle.tar.gz
       #   CHECKSUM=c55777bd47790c9ee728380b4d4e145153f805432775511777ac89d07b559226
       #   ;;
-      6.3.0)
+      6.3.2)
         # check https://www.swift.org/documentation/articles/wasm-getting-started.html for
         # the latest SDK_URL and CHECKSUM
         SDK_URL=https://download.swift.org/swift-6.3.2-release/wasm-sdk/swift-6.3.2-RELEASE/swift-6.3.2-RELEASE_wasm.artifactbundle.tar.gz
