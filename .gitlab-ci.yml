@@ -1,10 +1,8 @@
 image: docker:latest
 
-
 stages:
   - base
   - derived
-
 
 build base image:
   stage: base
@@ -12,8 +10,12 @@ build base image:
     - main
     - tags
     - branches
-  tags:
-    - spi-server-deploy
+  services:
+    - docker:dind
+  variables:
+    # This instructs Docker not to start over TLS, which is often easier
+    # for basic setups on shared runners.
+    DOCKER_TLS_CERTDIR: ""
   parallel:
     matrix:
       - SWIFT_VERSION:
@@ -54,8 +56,12 @@ build wasm image:
     - main
     - tags
     - branches
-  tags:
-    - spi-server-deploy
+  services:
+    - docker:dind
+  variables:
+    # This instructs Docker not to start over TLS, which is often easier
+    # for basic setups on shared runners.
+    DOCKER_TLS_CERTDIR: ""
   parallel:
     matrix:
       - SWIFT_VERSION:
@@ -129,8 +135,12 @@ build android image:
     - main
     - tags
     - branches
-  tags:
-    - spi-server-deploy
+  services:
+    - docker:dind
+  variables:
+    # This instructs Docker not to start over TLS, which is often easier
+    # for basic setups on shared runners.
+    DOCKER_TLS_CERTDIR: ""
   parallel:
     matrix:
       - SWIFT_VERSION:
@@ -183,38 +193,42 @@ build android image:
     docker system prune -f || true
 
 build custom docc image:
-      stage: derived
-      only:
-        - main
-        - tags
-        - branches
-      tags:
-        - spi-server-deploy
-      parallel:
-        matrix:
-          - SWIFT_VERSION:
-              # for the derived images we don't deal with Swift patch versions
-              - '6.3'
-              - '6.2'
-      script: |
-        BASENAME=custom-docc
-        # for the derived images we don't deal with Swift patch versions
-        SHORT_SWIFT_VERSION=$SWIFT_VERSION
-        if [ -n "$CI_COMMIT_TAG" ]; then
-          BASE_IMAGE=$CI_REGISTRY_IMAGE:basic-$SHORT_SWIFT_VERSION-$CI_COMMIT_TAG
-          IMAGE=$CI_REGISTRY_IMAGE:$BASENAME-$SHORT_SWIFT_VERSION-$CI_COMMIT_TAG
-        elif [ "$CI_COMMIT_REF_NAME" = "$CI_DEFAULT_BRANCH" ]; then
-          BASE_IMAGE=$CI_REGISTRY_IMAGE:basic-$SHORT_SWIFT_VERSION-latest
-          IMAGE=$CI_REGISTRY_IMAGE:$BASENAME-$SHORT_SWIFT_VERSION-latest
-        else
-          BASE_IMAGE=$CI_REGISTRY_IMAGE:basic-$SHORT_SWIFT_VERSION-$CI_COMMIT_REF_NAME
-          IMAGE=$CI_REGISTRY_IMAGE:$BASENAME-$SHORT_SWIFT_VERSION-$CI_COMMIT_REF_NAME
-        fi
-        echo BASE_IMAGE: $BASE_IMAGE
-        echo IMAGE: $IMAGE
-        docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-        docker build --pull -t $IMAGE --build-arg BASE_IMAGE=$BASE_IMAGE \
-          -f Dockerfile.$BASENAME .
-        docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-        docker push $IMAGE
-        docker system prune -f || true
+  stage: derived
+  only:
+    - main
+    - tags
+    - branches
+  services:
+    - docker:dind
+  variables:
+    # This instructs Docker not to start over TLS, which is often easier
+    # for basic setups on shared runners.
+    DOCKER_TLS_CERTDIR: ""
+  parallel:
+    matrix:
+      - SWIFT_VERSION:
+          # for the derived images we don't deal with Swift patch versions
+          - '6.3'
+          - '6.2'
+  script: |
+    BASENAME=custom-docc
+    # for the derived images we don't deal with Swift patch versions
+    SHORT_SWIFT_VERSION=$SWIFT_VERSION
+    if [ -n "$CI_COMMIT_TAG" ]; then
+      BASE_IMAGE=$CI_REGISTRY_IMAGE:basic-$SHORT_SWIFT_VERSION-$CI_COMMIT_TAG
+      IMAGE=$CI_REGISTRY_IMAGE:$BASENAME-$SHORT_SWIFT_VERSION-$CI_COMMIT_TAG
+    elif [ "$CI_COMMIT_REF_NAME" = "$CI_DEFAULT_BRANCH" ]; then
+      BASE_IMAGE=$CI_REGISTRY_IMAGE:basic-$SHORT_SWIFT_VERSION-latest
+      IMAGE=$CI_REGISTRY_IMAGE:$BASENAME-$SHORT_SWIFT_VERSION-latest
+    else
+      BASE_IMAGE=$CI_REGISTRY_IMAGE:basic-$SHORT_SWIFT_VERSION-$CI_COMMIT_REF_NAME
+      IMAGE=$CI_REGISTRY_IMAGE:$BASENAME-$SHORT_SWIFT_VERSION-$CI_COMMIT_REF_NAME
+    fi
+    echo BASE_IMAGE: $BASE_IMAGE
+    echo IMAGE: $IMAGE
+    docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    docker build --pull -t $IMAGE --build-arg BASE_IMAGE=$BASE_IMAGE \
+      -f Dockerfile.$BASENAME .
+    docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    docker push $IMAGE
+    docker system prune -f || true
