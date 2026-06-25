@@ -5,8 +5,10 @@ ARG CHECKSUM
 
 ENV DEBIAN_FRONTEND=noninteractive 
 
+# Swiftly is not sh shell compatible, use bash
+SHELL ["/bin/bash", "-c"]
+
 RUN apt-get update -y && apt-get install -y curl file jq gpg binutils git unzip gnupg2 libc6-dev libcurl4-openssl-dev libedit2 libgcc-11-dev libpython3-dev libstdc++-11-dev libxml2-dev libz3-dev pkg-config python3-lldb-13 tzdata zlib1g-dev
-RUN echo "arch: $(uname -m)"
 RUN curl -L -O https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz && \
 tar zxf swiftly-$(uname -m).tar.gz && \
 ./swiftly init -y --quiet-shell-followup --skip-install && \
