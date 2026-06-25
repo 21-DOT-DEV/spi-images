@@ -16,6 +16,7 @@ build base image:
     # This instructs Docker not to start over TLS, which is often easier
     # for basic setups on shared runners.
     DOCKER_TLS_CERTDIR: ""
+    FF_NETWORK_PER_BUILD: "true"
   parallel:
     matrix:
       - SWIFT_VERSION:
@@ -62,6 +63,7 @@ build wasm image:
     # This instructs Docker not to start over TLS, which is often easier
     # for basic setups on shared runners.
     DOCKER_TLS_CERTDIR: ""
+    FF_NETWORK_PER_BUILD: "true"
   parallel:
     matrix:
       - SWIFT_VERSION:
@@ -141,6 +143,7 @@ build android image:
     # This instructs Docker not to start over TLS, which is often easier
     # for basic setups on shared runners.
     DOCKER_TLS_CERTDIR: ""
+    FF_NETWORK_PER_BUILD: "true"
   parallel:
     matrix:
       - SWIFT_VERSION:
@@ -204,6 +207,7 @@ build custom docc image:
     # This instructs Docker not to start over TLS, which is often easier
     # for basic setups on shared runners.
     DOCKER_TLS_CERTDIR: ""
+    FF_NETWORK_PER_BUILD: "true"
   parallel:
     matrix:
       - SWIFT_VERSION:
