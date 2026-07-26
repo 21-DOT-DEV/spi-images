@@ -20,10 +20,10 @@ build base image:
   parallel:
     matrix:
       - SWIFT_VERSION:
+          - '6.4.beta'
           - '6.3.2'
           - '6.2.4'
           - '6.1.3'
-          - '6.0.3'
   script: |
     BASENAME=basic
     SHORT_SWIFT_VERSION=${SWIFT_VERSION%.*}  # 5.7.3 -> 5.7
@@ -36,8 +36,8 @@ build base image:
     fi
     echo IMAGE: $IMAGE
     
-    if [ $SWIFT_VERSION = "6.2.beta" ]; then
-      SWIFT_IMAGE=swiftlang/swift@sha256:c40cd00d376c8a06fd4769cadd6d6cfa7c205275437b795b564ecea3d8b8f913  # swift-6.2-DEVELOPMENT-SNAPSHOT-2025-05-30-a
+    if [ $SWIFT_VERSION = "6.4.beta" ]; then
+      SWIFT_IMAGE=swiftlang/swift@sha256:805c5f57d2cb73adfee6821813afbc411d414e885122dd13a741c5192e74ce57  # swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-07-23-a swiftlang/swift:nightly-6.4.x-jammy
     else
       SWIFT_IMAGE=swift:$SWIFT_VERSION-jammy
     fi
