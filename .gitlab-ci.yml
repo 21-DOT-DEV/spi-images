@@ -68,10 +68,10 @@ build wasm image:
     matrix:
       - SWIFT_VERSION:
           # Make sure these are handled in the case statement below
+          - '6.4.beta'
           - '6.3.2'
           - '6.2.0'
           - '6.1.3'
-          - '6.0.3'
   script: |
     BASENAME=wasm
     
@@ -88,12 +88,12 @@ build wasm image:
     SWIFT_IMAGE=swift:$SWIFT_VERSION-jammy
     
     case $SWIFT_VERSION in
-      # 6.2.beta)
-      #   SWIFT_IMAGE=swiftlang/swift@sha256:c40cd00d376c8a06fd4769cadd6d6cfa7c205275437b795b564ecea3d8b8f913  # swift-6.2-DEVELOPMENT-SNAPSHOT-2025-05-30-a
-      #   TAG=swift-6.2-DEVELOPMENT-SNAPSHOT-2025-05-30-a
-      #   SDK_URL=https://download.swift.org/swift-6.2-branch/wasm-sdk/${TAG}/${TAG}_wasm.artifactbundle.tar.gz
-      #   CHECKSUM=c55777bd47790c9ee728380b4d4e145153f805432775511777ac89d07b559226
-      #   ;;
+      6.4.beta)
+        SWIFT_IMAGE=swiftlang/swift@sha256:805c5f57d2cb73adfee6821813afbc411d414e885122dd13a741c5192e74ce57  # swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-07-23-a swiftlang/swift:nightly-6.4.x-jammy
+        TAG=swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-07-23-a
+        SDK_URL=https://download.swift.org/swift-6.4.x-branch/wasm-sdk/${TAG}/${TAG}_wasm.artifactbundle.tar.gz
+        CHECKSUM=643c2932dbff596f5f74c77801d5f233ffd09f3fe2925b3f91606cd6d4b153b1
+        ;;
       6.3.2)
         # check https://www.swift.org/documentation/articles/wasm-getting-started.html for
         # the latest SDK_URL and CHECKSUM
@@ -108,11 +108,6 @@ build wasm image:
         TAG=6.1-RELEASE
         SDK_URL=https://github.com/swiftwasm/swift/releases/download/swift-wasm-${TAG}/swift-wasm-${TAG}-wasm32-unknown-wasi.artifactbundle.zip
         CHECKSUM=7550b4c77a55f4b637c376f5d192f297fe185607003a6212ad608276928db992
-        ;;
-      6.0.3)
-        TAG=${SWIFT_VERSION}-RELEASE
-        SDK_URL=https://github.com/swiftwasm/swift/releases/download/swift-wasm-${TAG}/swift-wasm-${TAG}-wasm32-unknown-wasi.artifactbundle.zip
-        CHECKSUM=31d3585b06dd92de390bacc18527801480163188cd7473f492956b5e213a8618
         ;;
     esac
     
