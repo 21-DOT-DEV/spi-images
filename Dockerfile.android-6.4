@@ -1,0 +1,57 @@
+FROM ubuntu:jammy
+
+ARG SDK_URL
+ARG CHECKSUM
+
+ENV DEBIAN_FRONTEND=noninteractive 
+
+# Swiftly is not sh shell compatible, use bash
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update -y && apt-get install -y curl file jq gpg binutils git unzip gnupg2 libc6-dev libcurl4-openssl-dev libedit2 libgcc-11-dev libpython3-dev libstdc++-11-dev libxml2-dev libz3-dev pkg-config python3-lldb-13 tzdata zlib1g-dev
+RUN curl -L -O https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz && \
+tar zxf swiftly-$(uname -m).tar.gz && \
+./swiftly init -y --quiet-shell-followup --skip-install && \
+. "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh" && \
+hash -r
+
+RUN cd /usr/local/bin && ln -s $HOME/.local/share/swiftly/bin/swiftly 
+
+##################################################################################
+# Everything below is hardcoded while we use a Swift-6.4 nightly toolchain plus
+# matching Android SDK. Once the Android SDK build scripts PR [1] is merged,
+# we should be able to reuse these scripts in some fashion or work with the
+# maintainers to set up a shared image repository.
+#
+# [1]: https://github.com/swiftlang/swift-docker/pull/467
+##################################################################################
+
+# Check https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html
+# for the latest steps and variables
+
+RUN swiftly install 6.4.x-snapshot-2026-07-23
+
+ENV SWIFTLY_HOME_DIR="/root/.local/share/swiftly"
+ENV SWIFTLY_BIN_DIR="/root/.local/share/swiftly/bin"
+ENV SWIFTLY_TOOLCHAINS_DIR="/root/.local/share/swiftly/toolchains"
+ENV PATH="$SWIFTLY_BIN_DIR:$PATH"
+
+ENV TAG=swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-07-23-a
+ENV SDK_URL=https://download.swift.org/swift-6.4.x-branch/android-sdk/${TAG}/${TAG}_android.artifactbundle.tar.gz
+ENV CHECKSUM=c5bb1c4399375c1a59c6aa672f3f81014e111de0d464ada8ae8cc5814ce29681
+
+RUN swift sdk install ${SDK_URL} --checksum ${CHECKSUM}
+
+
+ENV NDK_DOWNLOAD_DIR=/android-ndk
+RUN mkdir $NDK_DOWNLOAD_DIR
+WORKDIR $NDK_DOWNLOAD_DIR
+
+RUN curl -fSL -o ndk.zip https://dl.google.com/android/repository/android-ndk-r27d-$(uname -s).zip
+RUN unzip -qo ndk.zip
+
+ENV ANDROID_NDK_HOME=$NDK_DOWNLOAD_DIR/android-ndk-r27d
+
+WORKDIR /root/.swiftpm
+
+RUN bash ./swift-sdks/${TAG}_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh

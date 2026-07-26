@@ -142,9 +142,9 @@ build android image:
   parallel:
     matrix:
       - SWIFT_VERSION:
+          - '6.4.beta'
           - '6.3.2'
           - '6.2.0'
-          - '6.1.3'
   script: |
     BASENAME=android
     
@@ -161,6 +161,9 @@ build android image:
     SWIFT_IMAGE=swift:$SWIFT_VERSION-jammy
     
     case $SWIFT_VERSION in
+      6.4.beta)
+        # all variables are hardcoded in Dockerfile.android-6.4 for now
+        ;;
       6.3.2)
         # all variables are hardcoded in Dockerfile.android-6.3 for now
         ;;
