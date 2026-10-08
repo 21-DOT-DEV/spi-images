@@ -1,0 +1,172 @@
+name: Publish Images
+
+# Builds the wasm and android cross-compile images and publishes them to
+# ghcr.io/21-dot-dev/spi-images. Mirrors the wasm-6.1.3 and android-6.1.3
+# entries of upstream's .gitlab-ci.yml, which publishes to registry.gitlab.com.
+#
+# The weekly schedule picks up security patches in the base image
+# (FROM ${SWIFT_IMAGE} — a build arg, so Dependabot cannot track it).
+
+# Runs on `ghcr`, this repo's default branch — scheduled workflows only run
+# on the default branch, and `main` here is a pure upstream mirror with no
+# workflow files of its own.
+
+on:
+  push:
+    branches: [ghcr]
+    paths:
+      - 'Dockerfile.wasm'
+      - 'Dockerfile.android-6.1'
+      - '.github/workflows/publish-images.yml'
+  pull_request:
+    branches: [ghcr]
+    paths:
+      - 'Dockerfile.wasm'
+      - 'Dockerfile.android-6.1'
+      - '.github/workflows/publish-images.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '30 4 * * 1'  # Mondays 04:30 UTC
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded PR runs; never cancel a run that may be mid-push.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: ${{ matrix.version-tag }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45  # image pull + build dominates; smoke tests are ~1 min
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Values must match the 6.1.3 cases in .gitlab-ci.yml.
+          - name: wasm
+            dockerfile: Dockerfile.wasm
+            swift-image: swift:6.1.3-jammy
+            sdk-url: https://github.com/swiftwasm/swift/releases/download/swift-wasm-6.1-RELEASE/swift-wasm-6.1-RELEASE-wasm32-unknown-wasi.artifactbundle.zip
+            checksum: 7550b4c77a55f4b637c376f5d192f297fe185607003a6212ad608276928db992
+            version-tag: wasm-6.1.3
+            latest-tag: wasm-6.1-latest
+            sdk-id-grep: wasm32-unknown-wasi
+            triple: wasm32-unknown-wasi
+            description: Swift 6.1.3 (Ubuntu 22.04) with the WebAssembly SDK (wasm32-unknown-wasi)
+          - name: android
+            dockerfile: Dockerfile.android-6.1
+            swift-image: swift:6.1.3-jammy
+            sdk-url: https://source.skip.tools/swift-android-toolchain/releases/download/6.1/swift-6.1-RELEASE-android-24-0.1.artifactbundle.tar.gz
+            checksum: f8696e3e84111b8c2c6f6e564b6266357987ea8d4aa3b2cf92f144357acde1c9
+            version-tag: android-6.1.3
+            latest-tag: android-6.1-latest
+            sdk-id-grep: android
+            triple: aarch64-unknown-linux-android28
+            description: Swift 6.1.3 (Ubuntu 22.04) with the Android SDK (aarch64-unknown-linux-android28)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false  # this job never runs git commands
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build and load image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          load: true
+          tags: |
+            ghcr.io/21-dot-dev/spi-images:${{ matrix.version-tag }}
+            ghcr.io/21-dot-dev/spi-images:${{ matrix.latest-tag }}
+          build-args: |
+            SWIFT_IMAGE=${{ matrix.swift-image }}
+            SDK_URL=${{ matrix.sdk-url }}
+            CHECKSUM=${{ matrix.checksum }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/21-DOT-DEV/spi-images
+            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Smoke test — SDK installed
+        env:
+          IMAGE: ghcr.io/21-dot-dev/spi-images:${{ matrix.version-tag }}
+          SDK_ID_GREP: ${{ matrix.sdk-id-grep }}
+        run: |
+          docker run --rm --platform linux/amd64 "$IMAGE" \
+            swift sdk list | tee /tmp/sdk-list.txt
+          grep -q "$SDK_ID_GREP" /tmp/sdk-list.txt
+
+      - name: Smoke test — target triple provided
+        env:
+          IMAGE: ghcr.io/21-dot-dev/spi-images:${{ matrix.version-tag }}
+          TRIPLE: ${{ matrix.triple }}
+        run: |
+          docker run --rm --platform linux/amd64 "$IMAGE" \
+            grep -rqs "$TRIPLE" /root/.swiftpm/swift-sdks/
+
+      # Listing the SDK isn't enough — prove the toolchain can compile AND
+      # link for the target by building a no-dependency executable package.
+      - name: Smoke test — cross-compiles a trivial executable
+        env:
+          IMAGE: ghcr.io/21-dot-dev/spi-images:${{ matrix.version-tag }}
+          TRIPLE: ${{ matrix.triple }}
+        run: |
+          docker run --rm --platform linux/amd64 -e TRIPLE "$IMAGE" bash -c '
+            set -e
+            mkdir -p /tmp/smoke/Sources/smoke
+            printf "// swift-tools-version:6.1\nimport PackageDescription\nlet package = Package(name: \"smoke\", targets: [.executableTarget(name: \"smoke\")])\n" > /tmp/smoke/Package.swift
+            printf "print(\"smoke ok\")\n" > /tmp/smoke/Sources/smoke/main.swift
+            cd /tmp/smoke
+            swift build --swift-sdk "$TRIPLE"
+          '
+
+      # Only pushes to `ghcr` (or dispatches from `ghcr`) may publish —
+      # PRs and manual runs from other branches build and smoke-test only.
+      # Login is deliberately late: nothing before this point needs GHCR
+      # auth, and this keeps a publish-capable token out of the runner's
+      # Docker config while downloaded SDK code builds and runs.
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/ghcr'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Push the loaded image itself — the exact bits the smoke tests ran
+      # against — rather than rebuilding under `push: true`, where a base-
+      # image tag update between builds could publish an untested image.
+      # Side effect: no build-provenance attestation is attached (that only
+      # happens on a buildx push); add actions/attest-build-provenance if a
+      # policy ever requires it.
+      # The dated tag gives consumers a rollback point: the only other tags
+      # are the moving `latest` and the re-published version tag. Date +
+      # commit keeps it unique across a same-day scheduled run and merge.
+      - name: Push image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/ghcr'
+        env:
+          IMAGE: ghcr.io/21-dot-dev/spi-images
+          VERSION_TAG: ${{ matrix.version-tag }}
+          LATEST_TAG: ${{ matrix.latest-tag }}
+        run: |
+          set -euo pipefail
+          DATED_TAG="${VERSION_TAG}-$(date -u +%Y%m%d)-${GITHUB_SHA:0:7}"
+          docker tag "$IMAGE:$VERSION_TAG" "$IMAGE:$DATED_TAG"
+          docker push "$IMAGE:$VERSION_TAG"
+          docker push "$IMAGE:$LATEST_TAG"
+          docker push "$IMAGE:$DATED_TAG"
+          # ghcr is force-pushed weekly, so the tag's commit soon leaves
+          # branch history — record the mapping here and in the
+          # image.revision label for traceability.
+          echo "Published \`$IMAGE:$DATED_TAG\` (+ \`:$VERSION_TAG\`, \`:$LATEST_TAG\`) from commit $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

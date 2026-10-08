@@ -1,0 +1,187 @@
+name: Upstream Sync
+
+# Keeps this fork in step with upstream's GitHub mirror
+# (https://github.com/SwiftPackageIndex/spi-images — upstream's primary is
+# GitLab; the GitHub repo is its mirror and the only public source).
+#
+# Branch model:
+#   * `main` is a pure upstream mirror — force-updated to upstream's head
+#     as the job's LAST step, so it marks the last fully processed head.
+#     Never commit to it.
+#   * `ghcr` (the repo's default branch) carries this fork's own commits —
+#     the workflows, README section, Dependabot config — rebased onto
+#     upstream's head each week, then force-pushed.
+#
+# Caveats worth knowing:
+#   * Scheduled workflows only run on the repo's default branch — that is
+#     why this file lives on `ghcr`, not `main`.
+#   * Checkout is pinned to `ghcr` so a manual run dispatched from another
+#     branch still rebases the right one — never the dispatched branch.
+#   * Pushes made with GITHUB_TOKEN do not trigger other workflows, so the
+#     force-push to `ghcr` below never runs publish-images.yml; upstream
+#     changes get picked up by that workflow's Monday schedule instead.
+#   * Upstream edits to the Dockerfiles we build are gated: if the delta
+#     touches them and `ghcr` doesn't already contain upstream's head, the
+#     run fails red — those build steps execute unreviewed inside
+#     publish-images.yml otherwise. Review the drift issue, then rebase
+#     and push `ghcr` by hand; `main` stays behind until it's handled.
+#   * Ordinary rebase conflicts also fail red — resolve locally:
+#     `git remote add upstream https://github.com/SwiftPackageIndex/spi-images`
+#     `git fetch upstream main && git checkout ghcr && git rebase upstream/main`,
+#     fix the conflicts, then `git push --force-with-lease`.
+#   * To decline an upstream change, commit a revert on `ghcr` — the revert
+#     is part of our delta and carries forward through every rebase.
+#   * If upstream ever adds .github/workflows/ files, GITHUB_TOKEN cannot
+#     push them ("refusing to allow a GitHub App to create or update
+#     workflow"). The fix is a GitHub App token with Workflows: write.
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Mondays 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write  # push the mirror and the rebased ghcr branch
+  issues: write    # open/comment on the build-input drift issue
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # gh resolves its repo from git remotes and prefers "upstream" over
+  # "origin" — pin it to this fork or every gh command hits upstream.
+  GH_REPO: ${{ github.repository }}
+  UPSTREAM_URL: https://github.com/SwiftPackageIndex/spi-images
+
+jobs:
+  sync:
+    name: Sync upstream
+    runs-on: ubuntu-latest
+    timeout-minutes: 15  # all git + gh API calls; nothing here should take minutes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ghcr      # always operate on ghcr, whatever ref was dispatched
+          fetch-depth: 0 # full history required for the rebase
+
+      - name: Fetch upstream
+        id: fetch
+        run: |
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch upstream main
+          # Everything downstream diffs from BASE — what this rebase would
+          # actually bring into ghcr — never from main's position. A "Sync
+          # fork" click or `gh repo sync` can move main past review; BASE
+          # only catches up when ghcr itself contains upstream's head.
+          echo "base=$(git merge-base HEAD upstream/main)" >> "$GITHUB_OUTPUT"
+
+      - name: Check upstream delta
+        id: delta
+        run: |
+          BASE="${{ steps.fetch.outputs.base }}"
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Upstream head is already in ghcr; nothing to sync."
+            echo "inputs=false" >> "$GITHUB_OUTPUT"
+            echo "dockerfiles=false" >> "$GITHUB_OUTPUT"
+          else
+            git diff "$BASE" upstream/main -- \
+              .gitlab-ci.yml Dockerfile.wasm Dockerfile.android-6.1 \
+              > /tmp/upstream.diff || true
+            [ -s /tmp/upstream.diff ] && echo "inputs=true" >> "$GITHUB_OUTPUT" || echo "inputs=false" >> "$GITHUB_OUTPUT"
+            # Dockerfile edits execute inside publish-images.yml — they
+            # are the attack surface that needs human review.
+            git diff "$BASE" upstream/main -- \
+              Dockerfile.wasm Dockerfile.android-6.1 \
+              > /tmp/dockerfiles.diff || true
+            [ -s /tmp/dockerfiles.diff ] && echo "dockerfiles=true" >> "$GITHUB_OUTPUT" || echo "dockerfiles=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # If upstream's delta touched the CI file or either Dockerfile we
+      # build, open an issue — or append a comment to the still-open one —
+      # flagging the changed input lines so the publish matrix can be
+      # mirrored. New diffs are appended as comments, never overwritten, so
+      # unhandled changes can't be wiped by a later week's edit.
+      # Grep patterns are deliberately broad: false positives are fine,
+      # missed changes are not.
+      - name: Report build-input drift
+        if: steps.delta.outputs.inputs == 'true'
+        run: |
+          # Exclude only real diff headers (`+++ b/file`, `--- a/file`), not
+          # content lines that happen to start with sign characters.
+          grep -nE "^[+-].*(SWIFT_IMAGE|SWIFT_VERSION|SDK_URL|CHECKSUM|6\.1)" \
+            /tmp/upstream.diff | grep -vE "^[0-9]*:(\+\+\+ b/|--- a/)" \
+            > /tmp/relevant.txt || true
+          # The <!-- sync-watch --> marker makes it a single living issue.
+          # gh JSON rewrites bot authors to "app/<name>" — match that form —
+          # and check authorship in jq so a human's issue quoting the
+          # marker never gets commented on.
+          ISSUE=$(gh issue list --state open --limit 50 \
+            --json number,body,author \
+            --jq '[.[] | select(.author.login == "app/github-actions" and (.body | contains("sync-watch"))) | .number] | .[0] // empty')
+          {
+            echo "<!-- sync-watch -->"
+            echo "Upstream's latest changes touch \`.gitlab-ci.yml\`, \`Dockerfile.wasm\`, or \`Dockerfile.android-6.1\`."
+            echo ""
+            echo "Changed lines relevant to the wasm \`6.1.3\` / android \`6.1.3\` entries (or matching \`SWIFT_IMAGE\`, \`SWIFT_VERSION\`, \`SDK_URL\`, \`CHECKSUM\`, \`6.1\` — conservative grep, may over-match):"
+            echo ""
+            echo "\`\`\`diff"
+            if [ -s /tmp/relevant.txt ]; then cat /tmp/relevant.txt; else echo "(no matching lines — inspect the full diff)"; fi
+            echo "\`\`\`"
+            echo ""
+            echo "If the wasm \`6.1.3\` or android \`6.1.3\` build inputs changed, update the matrix in \`.github/workflows/publish-images.yml\` on \`ghcr\`, then close this issue."
+          } > /tmp/issue.md
+          if [ -n "$ISSUE" ]; then
+            # While the Dockerfile gate blocks, the same diff would be
+            # re-posted weekly — skip it when the last bot comment already
+            # carries it.
+            # Compare against the issue body too — the first week's report
+            # lives there, not in a comment.
+            LAST=$(gh issue view "$ISSUE" --json body,comments \
+              --jq '([.body | select(contains("sync-watch"))] + [.comments[] | select(.author.login == "app/github-actions" and (.body | contains("sync-watch"))) | .body]) | last // empty')
+            printf '%s\n' "$LAST" > /tmp/last-comment.md
+            if cmp -s /tmp/last-comment.md /tmp/issue.md; then
+              echo "Drift unchanged from the last report; not re-posting."
+            else
+              gh issue comment "$ISSUE" --body-file /tmp/issue.md
+              echo "Appended this week's diff to existing drift issue #$ISSUE."
+            fi
+          else
+            gh issue create --title "Upstream changed image build inputs" --body-file /tmp/issue.md
+          fi
+
+      # Dockerfile edits land on `ghcr` via the rebase, then the scheduled
+      # publish builds them — with no human in between. A non-empty
+      # Dockerfile diff means upstream's head carries build-step changes
+      # ghcr lacks: block until a maintainer rebases and pushes by hand.
+      - name: Require review for Dockerfile changes
+        if: steps.delta.outputs.dockerfiles == 'true'
+        run: |
+          echo "::error title=Manual rebase required::upstream changed Dockerfile.wasm or Dockerfile.android-6.1 — its build steps would run unreviewed in publish-images.yml. Review the drift issue, then: git remote add upstream $UPSTREAM_URL && git fetch upstream main && git checkout ghcr && git rebase upstream/main && git push --force-with-lease"
+          exit 1
+
+      # Rebase ghcr (checked out above) onto upstream's head. Our commits —
+      # the workflows, README section, Dependabot config — replay on top;
+      # maintainer commits replay like any other. --empty=drop drops commits
+      # upstream has since adopted verbatim. --force-with-lease refuses to
+      # overwrite anything pushed to ghcr since the fetch.
+      - name: Rebase ghcr onto upstream
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git rebase --empty=drop upstream/main; then
+            git rebase --abort || true
+            echo "::error title=Rebase conflict::upstream/main conflicts with our commits on ghcr. Resolve locally: git remote add upstream $UPSTREAM_URL && git fetch upstream main && git checkout ghcr && git rebase upstream/main && git push --force-with-lease"
+            exit 1
+          fi
+          git push --force-with-lease origin "HEAD:refs/heads/ghcr"
+
+      # Kept last so `main` only ever reflects a fully successful run —
+      # it is now purely informational (humans diff `main..ghcr` to see
+      # our delta); no check above depends on its position. Force-push is
+      # safe — nothing on `main` is ours, and it survives an upstream
+      # history rewrite.
+      - name: Update main mirror
+        run: git push --force origin "upstream/main:refs/heads/main"

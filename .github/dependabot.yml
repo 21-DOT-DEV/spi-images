@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # Keeps the pinned action SHAs in .github/workflows/ current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Let new action releases age a week before proposing them — same
+    # convention as the other 21-DOT-DEV repos' Dependabot configs.
+    cooldown:
+      default-days: 7
